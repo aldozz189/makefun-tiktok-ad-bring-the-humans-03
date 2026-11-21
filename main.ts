@@ -9,12 +9,17 @@
 // the video and scores nothing; the house reads the video and its views
 // from TikTok itself.
 //
+// Before copying, it checks that VIDEO.json is well-formed and actually
+// names a TikTok video page. A missing file, broken JSON, or a URL that is
+// not a TikTok video address fails loudly instead of silently handing the
+// grader a file it cannot use.
+//
 // It runs on Node 22, uses the standard library only, and needs no network.
 // Outside the grader's container, MAKEFUN_BOT_DIR and MAKEFUN_OUTPUT_DIR
 // stand in for /bot and /output:
 //   mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const sourceDir = process.env.MAKEFUN_BOT_DIR ?? '/bot';
@@ -26,6 +31,22 @@ if (!existsSync(source)) {
   process.exit(1);
 }
 
+let videoUrl: unknown;
+try {
+  videoUrl = JSON.parse(readFileSync(source, 'utf8')).url;
+} catch (error) {
+  console.error(`VIDEO.json in ${sourceDir} is not valid JSON: ${(error as Error).message}`);
+  process.exit(1);
+}
+
+const tiktokVideo = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+\/?(\?.*)?$/;
+if (typeof videoUrl !== 'string' || !tiktokVideo.test(videoUrl)) {
+  console.error(
+    `VIDEO.json in ${sourceDir} does not name a TikTok video URL (expected https://www.tiktok.com/@<user>/video/<id>)`,
+  );
+  process.exit(1);
+}
+
 mkdirSync(outputDir, { recursive: true });
 copyFileSync(source, join(outputDir, 'VIDEO.json'));
-console.log(`copied VIDEO.json to ${outputDir}`);
+console.log(`copied VIDEO.json to ${outputDir} (video: ${videoUrl})`);
